@@ -18,6 +18,7 @@ class AudialaPreprocessor:
         
     def load_data(self) -> pd.DataFrame:
         self.df = pd.read_csv(self.filepath)
+        return self.df
         
     def inspect_schema(self) -> None:
         if self.df is None:
@@ -36,11 +37,22 @@ class AudialaPreprocessor:
         df_clean = self.df.copy()
         
         required_cols = ["name", "latitude", "longitude"]
-        existing_required = [col for col in required_cols if col in df_clean.columns]
-        df_clean = df_clean.dropna(subset=existing_required)
+        
+        missing_cols = [
+            col for col in required_cols
+            if col not in df_clean.columns
+        ]
+
+
+        if missing_cols:
+            raise ValueError(
+                f"Missing required columns: {missing_cols}"
+            )
+            
+        df_clean = df_clean.dropna(subset=required_cols)
         
         if "latitude" in df_clean.columns and "longitude" in df_clean.columns:
-            df_clean["langitude"] = pd.to_numeric(df_clean["langitude"], errors="coerce")
+            df_clean["longitude"] = pd.to_numeric(df_clean["longitude"], errors="coerce")
             df_clean["latitude"] = pd.to_numeric(df_clean["latitude"], errors="coerce")
             df_clean = df_clean.dropna(subset=["latitude", "longitude"])
             
@@ -60,7 +72,7 @@ class AudialaPreprocessor:
         print(f"Valid records remaining after sanitization: {len(self.df)}")
         return self.df
     
-    def filter_for_mpv(self, top_n_cities: int = 5, specific_cities: Optional[list[str]] = None) -> pd.DataFrame:
+    def filter_for_mvp(self, top_n_cities: int = 5, specific_cities: Optional[list[str]] = None) -> pd.DataFrame:
         if self.df is None or "city" not in self.df.columns:
             return self.df
         
