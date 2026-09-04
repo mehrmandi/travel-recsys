@@ -9,7 +9,7 @@ Responsibilities:
 
 """
 
-
+import os
 import pandas as pd
 from typing import Tuple, Optional
 
@@ -155,6 +155,22 @@ class AudialaPreprocessor:
         train_df = df_shuffled.iloc[n_test + n_val:].reset_index(drop=True)
         
         return train_df, val_df, test_df
+    
+    def save_splits(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, output_dir: str = "data/processed") -> None:
+        os.makedirs(output_dir, exist_ok=True)
+        
+        train_path = os.path.join(output_dir, "train.csv")
+        val_path = os.path.join(output_dir, "val.csv")
+        test_path = os.path.join(output_dir, "test.csv")
+        
+        train_df.to_csv(train_path, index=False)
+        val_df.to_csv(val_path, index=False)
+        test_df.to_csv(test_path, index=False)
+        
+        print(f"\nArtifacts successfully saved to '{output_dir}':")
+        print(f"- {train_path} ({len(train_df)} rows)")
+        print(f"- {val_path} ({len(val_df)} rows)")
+        print(f"- {test_path} ({len(test_df)} rows)")
             
 
             

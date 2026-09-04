@@ -24,8 +24,12 @@ def main():
     )
     
     train_df, val_df, test_df = preprocessor.create_splits(
-        df=df_mvp
-    )
+        test_size=0.2,
+        val_size=0.1,
+        random_state=42
+        )
+
+    preprocessor.save_splits(train_df, val_df, test_df, output_dir="data/processed")
 
 
 if __name__ == "__main__":
