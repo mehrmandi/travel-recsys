@@ -106,6 +106,7 @@ class UserProfileRecommender:
         similarities = np.dot(self.normalized_items, user_vector)
         
         results = self.places_df.copy()
+        results["item_index"] = results.index
         results["similarity_score"] = similarities
         
         if exclude_indices:
