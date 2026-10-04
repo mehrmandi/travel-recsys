@@ -120,7 +120,14 @@ class UserProfileRecommender:
         ranked_df = results.sort_values(by="similarity_score", ascending=False).head(top_k)
         
         display_cols = [
-            col for col in ["name_en", "category", "city_en", "country_en", "similarity_score"]
+            col for col in [
+                "item_index",
+                "name_en",
+                "category",
+                "city_en",
+                "country_en",
+                "similarity_score"
+            ]
             if col in ranked_df.columns
         ]
         
