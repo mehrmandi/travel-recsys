@@ -15,7 +15,7 @@ class OfflineEvaluator:
         self.recommender = recommender
         self.k_list = sorted(k_list) if k_list else [5, 10]
         
-    def evaluate_leave_one_out(self, user_interactions: Dict[str, List[int]], min_interactions: int = 3, city_filter: Optional[str] = None) -> pd.DataFrame:
+    def evaluate_last_item_holdout(self, user_interactions: Dict[str, List[int]], min_interactions: int = 3, city_filter: Optional[str] = None) -> pd.DataFrame:
         """
         Runs LOO evaluation.
         For each user:
