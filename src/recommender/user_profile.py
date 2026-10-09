@@ -3,20 +3,29 @@ User Profile Builder and Baseline Content-Based Recommender.
 
 Responsibilities:
 - Build L2-normalized user vectors from explicit interests (MVP cold-start approach).
-- Build L2-normalized user vectors from interaction history (liked/visited places).
+- Build L2-normalized user vectors from interaction history (uniform or weighted).
+- Support interaction-type weighting and exponential time decay.
 - Rank candidate places using Cosine Similarity with item exclusion and city filtering.
 """
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union , Dict, Sequence
 import numpy as np
 import pandas as pd
 
 from src.features.category_encoder import CategoryEncoder
 
+DEFAULT_INTERACTION_WEIGHTS: Dict[str, float] = {
+    "view": 1.0,
+    "like": 2.0,
+    "bookmark": 2.5,
+    "visit": 3.0,
+    "review": 3.0,
+}
+
 class UserProfileBuilder:
     """
     Constructs user preference vectors either from explicit interest categories
-    or from past interaction history.
+    or from past interaction history (uniform or weighted).
     """
     
     @staticmethod
@@ -38,8 +47,6 @@ class UserProfileBuilder:
         df_interests = pd.DataFrame({encoder.target_column: interests})
         encoded_df = encoder.transform(df_interests)
         encoded_vectors = encoded_df.to_numpy(dtype=np.float32)
-        
-        
             
         raw_profile = np.mean(encoded_vectors , axis=0)
         
@@ -47,33 +54,81 @@ class UserProfileBuilder:
         return raw_profile / norm if norm > 0 else raw_profile
     
     @staticmethod
-    def build_from_history(feature_matrix: np.ndarray, interaction_indices: List[int]) -> np.ndarray:
+    def build_from_history(
+        feature_matrix: np.ndarray, 
+        interaction_indices: List[int], 
+        interaction_types: Optional[Sequence[str]] = None,
+        timestamps: Optional[Sequence[Union[pd.Timestamp, str, int, float]]] = None,
+        interaction_weights_map: Optional[Dict[str, float]] = None,
+        decay_rate: float = 0.0,
+        ) -> np.ndarray:
         """
-        Build an aggregated user profile vector by averaging vectors of interacted places.
+        Build an aggregated user profile vector with optional interaction weighting and time decay.
 
         :param feature_matrix: 2D numpy array of item representations (N x D).
-        :param interaction_indices: Row indices of visited/liked places.
+        :param interaction_indices: Sequence of row indices for visited/interacted places.
+        :param interaction_types: Optional sequence of interaction types corresponding to indices.
+        :param timestamps: Optional sequence of datetime/epoch timestamps of interactions.
+        :param interaction_weights_map: Dictionary mapping interaction type strings to scalar weights.
+        :param decay_rate: Exponential decay parameter lambda (>= 0). If 0.0, time decay is disabled.
         :return: 1D normalized numpy array (D,).
         """
         if not interaction_indices:
             raise ValueError("interaction_indices cannot be empty.")
         
-        max_idx = feature_matrix.shape[0] - 1
+        if decay_rate < 0.0:
+            raise ValueError("decay_rate must be >= 0.0")
+
+        indices = np.asarray(interaction_indices, dtype=np.int64)
+        n_items = feature_matrix.shape[0]
         
-        for idx in interaction_indices:
-            if idx < 0 or idx > max_idx:
-                raise IndexError(f"Interaction index {idx} out of bounds (max: {max_idx}).")
-
-        liked_vectors = feature_matrix[interaction_indices]
-
+        if np.any(indices < 0) or np.any(indices >= n_items):
+            out_of_bounds = indices[(indices < 0) | (indices >= n_items)]
+            raise IndexError(
+                f"Interaction indices contains out-of-bounds values: {out_of_bounds.tolist()} "
+                f"(valid range: 0 to {n_items - 1})."
+            )
             
-        raw_profile = np.mean(liked_vectors, axis=0)
+        n_interactions = len(indices)
+        weights = np.ones(n_interactions, dtype=np.float32)
+
+        if interaction_types is not None:
+            if len(interaction_types) != n_interactions:
+                raise ValueError("Length of interaction_types must match interaction_indices.")
+                            
+            weight_mapping = interaction_weights_map or DEFAULT_INTERACTION_WEIGHTS
+            type_weights = np.array(
+                [weight_mapping.get(str(t).lower(), 1.0) for t in interaction_types],
+                dtype=np.float32,
+            )
+            weights *= type_weights
             
+        
+        if decay_rate > 0.0 and timestamps is not None:
+            if len(timestamps) != n_interactions:
+                raise ValueError("Length of timestamps must match interaction_indices.")
+            
+
+            ts_series = pd.to_datetime(timestamps)
+            max_ts = ts_series.max()
+            delta_days = (max_ts - ts_series).total_seconds() / 86400.0
+            time_weights = np.exp(-decay_rate * delta_days.to_numpy(dtype=np.float32))
+            weights *= time_weights
+            
+        if np.any(weights < 0):
+            raise ValueError("Interaction weights must be non-negative.")
+
+
+        sum_weights = np.sum(weights)
+        if sum_weights <= 0:
+            weights = np.ones(n_interactions, dtype=np.float32)
+            sum_weights = float(n_interactions)
+            
+        liked_vectors = feature_matrix[indices]
+        raw_profile = np.dot(weights, liked_vectors) / sum_weights
+
         norm = np.linalg.norm(raw_profile)
         return raw_profile / norm if norm > 0 else raw_profile
-    
-    
-
 class UserProfileRecommender:
     """
     Ranks candidate places against a user profile vector using Cosine Similarity.
