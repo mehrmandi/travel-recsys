@@ -129,66 +129,125 @@ class UserProfileBuilder:
 
         norm = np.linalg.norm(raw_profile)
         return raw_profile / norm if norm > 0 else raw_profile
+
+
 class UserProfileRecommender:
     """
     Ranks candidate places against a user profile vector using Cosine Similarity.
     """
-    
+
     def __init__(self, places_df: pd.DataFrame, feature_matrix: Union[pd.DataFrame, np.ndarray]):
         if isinstance(feature_matrix, pd.DataFrame):
             self.feature_matrix = feature_matrix.to_numpy(dtype=np.float32)
-            
         else:
             self.feature_matrix = np.asarray(feature_matrix, dtype=np.float32)
-            
+
         if len(places_df) != self.feature_matrix.shape[0]:
             raise ValueError(
                 f"Length mismatch: places_df ({len(places_df)}) vs "
                 f"feature_matrix ({self.feature_matrix.shape[0]})."
             )
-            
+
         self.places_df = places_df.reset_index(drop=True)
-        
+
         item_norms = np.linalg.norm(self.feature_matrix, axis=1, keepdims=True)
         item_norms[item_norms == 0] = 1e-10
         self.normalized_items = self.feature_matrix / item_norms
-        
-    def recommend(self, user_vector: np.ndarray, top_k: int = 10, exclude_indices: Optional[list[int]] = None, city_filter: Optional[str] = None) -> pd.DataFrame:
+
+    def recommend(
+        self,
+        user_vector: np.ndarray,
+        top_k: int = 10,
+        exclude_indices: Optional[list[int]] = None,
+        city_filter: Optional[str] = None,
+    ) -> pd.DataFrame:
         """
         Rank candidate places using vectorized Cosine Similarity.
+
+        :param user_vector: 1D profile vector (D,). It is L2-normalized internally,
+                            so scores are true cosine similarities.
+        :param top_k: Number of results to return. Must be a positive integer.
+        :param exclude_indices: Item indices to remove from the candidates
+                                (must be within [0, n_items - 1]).
+        :param city_filter: Optional city name; matched case-/whitespace-insensitively.
+        :raises ValueError: top_k <= 0, wrong user_vector shape, or city_filter
+                            requested but the catalog has no `city_en` column.
+        :raises IndexError: exclude_indices contains out-of-bounds values.
         """
-        
+        n_items, n_dims = self.feature_matrix.shape
+
+        # ---- Input validation -------------------------------------------------
+        # NOTE: pandas head(-k) silently drops the LAST k rows, so a negative
+        # top_k must be rejected explicitly instead of "working" with wrong output.
+        if isinstance(top_k, bool) or not isinstance(top_k, (int, np.integer)) or top_k <= 0:
+            raise ValueError(
+                f"top_k must be a positive integer, got {top_k!r}.")
+
+        user_vector = np.asarray(user_vector, dtype=np.float32)
+        if user_vector.shape != (n_dims,):
+            raise ValueError(
+                f"user_vector must have shape ({n_dims},), got {user_vector.shape}."
+            )
+
+        exclude_array = None
+        if exclude_indices is not None and len(exclude_indices) > 0:
+            exclude_array = np.asarray(exclude_indices, dtype=np.int64)
+            out_of_bounds = exclude_array[(
+                exclude_array < 0) | (exclude_array >= n_items)]
+            if out_of_bounds.size > 0:
+                raise IndexError(
+                    f"exclude_indices contains out-of-bounds values: {out_of_bounds.tolist()} "
+                    f"(valid range: 0 to {n_items - 1})."
+                )
+
+        if city_filter and "city_en" not in self.places_df.columns:
+            raise ValueError(
+                "city_filter was provided but places_df has no 'city_en' column.")
+
+        # ---- Scoring ----------------------------------------------------------
+        # Normalize the user vector so scores are true cosine similarities.
+        # (A zero vector stays zero -> all scores 0.0, no NaNs.)
+        user_norm = np.linalg.norm(user_vector)
+        if user_norm > 0:
+            user_vector = user_vector / user_norm
+
         similarities = np.dot(self.normalized_items, user_vector)
-        
+
         results = self.places_df.copy()
         results["item_index"] = results.index
         results["similarity_score"] = similarities
-        
-        if exclude_indices:
-            results = results.drop(index=exclude_indices, errors="ignore")
-            
-        if city_filter and "city_en" in results.columns:
+
+        # ---- Filtering --------------------------------------------------------
+        if exclude_array is not None:
+            results = results.drop(index=exclude_array)
+
+        if city_filter:
             results = results[
-                results["city_en"].astype(str).str.strip().str.lower() == city_filter.strip().lower()
-                ]
-            
-        ranked_df = results.sort_values(by="similarity_score", ascending=False).head(top_k)
-        
+                results["city_en"].astype(str).str.strip().str.lower()
+                == city_filter.strip().lower()
+            ]
+
+        # ---- Ranking ----------------------------------------------------------
+        # kind="stable": tied scores keep catalog order, so rankings (and therefore
+        # offline-evaluation metrics) are reproducible across runs.
+        ranked_df = results.sort_values(
+            by="similarity_score", ascending=False, kind="stable"
+        ).head(top_k)
+
         display_cols = [
-            col for col in [
+            col
+            for col in [
                 "item_index",
                 "name_en",
                 "category",
                 "city_en",
                 "country_en",
-                "similarity_score"
+                "similarity_score",
             ]
             if col in ranked_df.columns
         ]
-        
+
         return ranked_df[display_cols].reset_index(drop=True)
-    
-            
 
     
                 
