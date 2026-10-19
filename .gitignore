@@ -37,3 +37,12 @@ Thumbs.db
 
 # Logs
 *.log
+
+
+# Local evaluation data
+
+data/
+
+# Temporary evaluation verification script
+
+scripts/verify_evaluation_split.py
