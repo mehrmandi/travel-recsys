@@ -107,7 +107,6 @@ def main():
     print("           FOURSQUARE NYC OFFLINE EVALUATION RESULTS           ")
     print("=" * 60)
 
-    # استخراج سطر میانگین به عنوان یک دیکشنری یا سریز تک‌ردیفه
     mean_row = results_df[results_df["user_id"] == "MEAN"].iloc[0]
 
     print("\nMacro-Averaged Metrics across Eligible Users:")
@@ -118,7 +117,6 @@ def main():
 
     print("=" * 60)
 
-    # نمایش ۵ کاربر اول برای نمونه
     print("\nSample User Metrics (First 5):")
     print(results_df[results_df["user_id"] != "MEAN"].head())
 
