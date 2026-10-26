@@ -7,6 +7,7 @@ import pandas as pd
 from src.recommender.user_profile import UserProfileBuilder, UserProfileRecommender
 from src.evaluation.metrics import recall_at_k, precision_at_k, reciprocal_rank_at_k
 from src.recommender.most_popular import PopularRecommender
+from src.recommender.hybrid import HybridRecommender
 class OfflineEvaluator:
     """
     Executes Leave-One-Out offline evaluation across a population of users.
@@ -42,18 +43,24 @@ class OfflineEvaluator:
                     city_filter=city_filter,
                 )
             else:
-                # Build profile from training set
                 user_vec = UserProfileBuilder.build_from_history(
                     feature_matrix=self.recommender.feature_matrix,
                     interaction_indices=train_history,
                 )
 
-                recs_df = self.recommender.recommend(
-                    user_vector=user_vec,
-                    top_k=max_k,
-                    exclude_indices=train_history,
-                    city_filter=city_filter,
-                )
+                if isinstance(self.recommender, HybridRecommender):
+                    recs_df = self.recommender.recommend(
+                        user_vector=user_vec,
+                        top_k=max_k,
+                        exclude_indices=train_history,
+                    )
+                else:
+                    recs_df = self.recommender.recommend(
+                        user_vector=user_vec,
+                        top_k=max_k,
+                        exclude_indices=train_history,
+                        city_filter=city_filter,
+                    )
 
             recommended_indices = recs_df["item_index"].tolist()
 
