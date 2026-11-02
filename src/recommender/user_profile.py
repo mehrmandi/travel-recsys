@@ -191,7 +191,7 @@ class UserProfileRecommender:
 
         exclude_array = None
         if exclude_indices is not None and len(exclude_indices) > 0:
-            exclude_array = np.asarray(exclude_indices, dtype=np.int64)
+            exclude_array = np.asarray(list(exclude_indices), dtype=np.int64)
             out_of_bounds = exclude_array[(
                 exclude_array < 0) | (exclude_array >= n_items)]
             if out_of_bounds.size > 0:
