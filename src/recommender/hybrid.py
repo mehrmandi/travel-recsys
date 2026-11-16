@@ -9,9 +9,10 @@ where:
     - P(i) is the min-max normalized log1p popularity count in [0.0, 1.0]
     - alpha in [0.0, 1.0]
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
+from collections import Counter
 
 class HybridRecommender:
     """
@@ -55,6 +56,20 @@ class HybridRecommender:
         
         return (log_counts - min_val) / (max_val - min_val)
     
+    def fit(self, interactions: Sequence[int]) -> "HybridRecommender":
+        counts = Counter(interactions)
+
+        unknown = set(counts) - set(range(self.num_items))
+        if unknown:
+            raise IndexError(
+                f"Training interactions contain out-of-range item indices: "
+                f"{sorted(unknown)}."
+            )
+
+        self.train_counts = dict(counts)
+        self.normalized_pop_scores = self._compute_normalized_popularity()
+        return self
+    
     def recommend(
         self,
         user_vector: np.ndarray,
@@ -84,7 +99,7 @@ class HybridRecommender:
         
         valid_mask = np.ones(self.num_items, dtype=bool)
         if exclude_indices is not None and len(exclude_indices) > 0:
-            excluded = np.asarray(exclude_indices, dtype=np.int64)
+            excluded = np.array(list(exclude_indices), dtype=np.int64)
             excluded = excluded[(excluded >= 0) & (excluded < self.num_items)]
             valid_mask[excluded] = False
             

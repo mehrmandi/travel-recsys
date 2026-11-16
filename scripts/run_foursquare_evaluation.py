@@ -5,7 +5,6 @@ Pipeline to evaluate UserProfileRecommender & OfflineEvaluator on real Foursquar
 from sklearn.preprocessing import normalize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.stats import wilcoxon
-from collections import Counter
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -186,12 +185,6 @@ def main():
 
     print(f"Users with an eligible unseen target: {len(evaluation_cases):,}")
 
-    train_counts = Counter(
-        item_index
-        for case in evaluation_cases
-        for item_index in case.train_history
-    )
-
 
     # 1. Content-Based Recommender
     print("\n[*] Initializing UserProfileRecommender...")
@@ -215,7 +208,7 @@ def main():
     print("\n[*] Initializing PopularRecommender...")
     pop_recommender = PopularRecommender(
         places_df=items_df,
-        train_counts=train_counts
+        train_counts={}
     )
     pop_evaluator = OfflineEvaluator(
         recommender=pop_recommender,
@@ -234,7 +227,7 @@ def main():
     print("\n[*] Running Hybrid Evaluation (alpha = 0.90)...")
     hybrid_rec_90 = HybridRecommender(
         feature_matrix=feature_matrix,
-        train_counts=train_counts,
+        train_counts={},
         alpha=0.90,
     )
     hybrid_evaluator_90 = OfflineEvaluator(
@@ -253,7 +246,7 @@ def main():
     print("\n[*] Running Hybrid Evaluation (alpha = 0.95)...")
     hybrid_rec_95 = HybridRecommender(
         feature_matrix=feature_matrix,
-        train_counts=train_counts,
+        train_counts={},
         alpha=0.95,
     )
     hybrid_evaluator_95 = OfflineEvaluator(

@@ -8,9 +8,11 @@ the content-based model must beat in offline evaluation.
 Important: `train_counts` must be built from training data only (without each
 user's held-out last interaction), otherwise the baseline sees the future.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
+from collections import Counter
+
 
 class PopularRecommender:
     """
@@ -72,7 +74,29 @@ class PopularRecommender:
             by=["popularity_count", "item_index"],
             ascending=[False, True],
         ).reset_index(drop=True)
+    
+    
+    def fit(self, interactions: Sequence[int]) -> "PopularRecommender":
+        counts = Counter(interactions)
         
+        unknown = set(counts) - set(self._valid_indices.tolist())
+        
+        if unknown:
+            raise IndexError(
+                f"Training interactions contain item_index values not in the catalog: "
+                f"{sorted(unknown)}."
+            )    
+            
+        self.places_df["popularity_count"] = (
+            self.places_df["item_index"].map(counts).fillna(0).astype(int)
+        )
+        
+        self.sorted_df = self.places_df.sort_values(
+            by=["popularity_count", "item_index"],
+            ascending=[False, True],
+        ).reset_index(drop=True)
+        
+        return self
         
     def recommend(
         self,
@@ -98,7 +122,7 @@ class PopularRecommender:
         results = self.sorted_df
 
         if exclude_indices is not None and len(exclude_indices) > 0:
-            excluded = np.asarray(exclude_indices, dtype=np.int64)
+            excluded = np.array(list(exclude_indices), dtype=np.int64)
             unknown = excluded[~np.isin(excluded, self._valid_indices)]
 
             if unknown.size > 0:

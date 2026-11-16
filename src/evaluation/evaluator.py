@@ -40,7 +40,7 @@ def build_last_unseen_evaluation_cases(
     case, including the held-out target. Therefore, at least
     `min_interactions - 1` training check-ins are required.
     """
-    if min_interactions < 2:
+    if min_interactions < 5:
         raise ValueError("min_interactions must be >= 5")
 
     cases: List[EvaluationCase] = []
@@ -114,6 +114,22 @@ class OfflineEvaluator:
             user_interactions=user_interactions,
             min_interactions=min_interactions,
         )
+        
+        if not cases:
+            raise ValueError(
+                "No eligible users found for the last-unseen holdout protocol."
+            )
+
+
+        train_interactions = [
+            item_index
+            for case in cases
+            for item_index in case.train_history
+        ]
+
+        if isinstance(self.recommender, (PopularRecommender, HybridRecommender)):
+            self.recommender.fit(train_interactions)
+
 
         for case in cases:
             train_history = case.train_history
